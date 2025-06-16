@@ -501,7 +501,8 @@ def create_map_cat_colorbar(data_col: str = "ada_major_class"):
         categories=classes,
         colorscale=colorscale,
         width=20, height=120,
-        position="topright"
+        position="topright",
+        id="map-colorbar"
     )
 
 
@@ -851,11 +852,11 @@ def update_aoi_data(n_clicks, egmsdate, aoiname, avgvel):
 @callback(
     Output("leaflet-map", "children"),
     Output("scatterplot-ts", "figure", allow_duplicate=True),
-    [Input("color-dropdown", "value"),
-     Input("ada-point-radio", "value")],
+    [Input("ada-point-radio", "value")],
+    State("color-dropdown", "value"),
     prevent_initial_call=True
 )
-def update_poly_map_colour(color_col, ada_point_val):
+def update_poly_points_map(ada_point_val, color_col):
     if ada_point_val == 1:
         geojson = create_poly_geojson(
             ADAS_GDF, color_col, poly_style_handle,
@@ -880,6 +881,46 @@ def update_poly_map_colour(color_col, ada_point_val):
 
 
 @callback(
+    Output("map-polyg-geojson", "hideout"),
+    [Input("color-dropdown", "value")],
+    State("ada-point-radio", "value"),
+    prevent_initial_call=True
+)
+def update_poly_map_colour(color_col, ada_point_val):
+    if ada_point_val == 2:
+        raise PreventUpdate
+    hideout = create_hideout(color_col)
+    classes = create_map_classes(color_col)
+    colorscale = create_map_colorscale(color_col)
+    return hideout
+
+
+@callback(
+    Output("map-colorbar", "categories"),
+    Output("map-colorbar", "colorscale"),
+    [Input("color-dropdown", "value")],
+    prevent_initial_call=True
+)
+def update_map_colourbar(color_col):
+    classes = create_map_classes(color_col)
+    colorscale = create_map_colorscale(color_col)
+    return classes, colorscale
+
+
+@callback(
+    Output("map-points-geojson", "hideout"),
+    [Input("color-dropdown", "value")],
+    State("ada-point-radio", "value"),
+    prevent_initial_call=True
+)
+def update_points_map_colour(color_col, ada_point_val):
+    if ada_point_val == 1:
+        raise PreventUpdate
+    hideout = create_points_hideout(color_col)
+    return hideout
+
+
+@callback(
     Output("poly-map-features", "data"),
     [Input("map-polyg-geojson", "clickData")],
     prevent_initial_call=True
@@ -897,7 +938,7 @@ def update_poly_plots(click_data):
     prevent_initial_call=True
 )
 def get_ts_point_data(click_data):
-    if click_data is None or click_data == []:
+    if click_data is None:
         raise PreventUpdate
     pid = click_data["properties"]["pid"]
     ts_filename = get_ts_filename(
