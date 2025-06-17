@@ -1,10 +1,11 @@
 import plotly.express as px
 import plotly.graph_objects as go
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from statsmodels.graphics.gofplots import qqplot
 from utils.fcf_analysis.noisefuncs import identify_outlier_groups
-
+matplotlib.use("agg")
 
 margin_defaults = {
     "b": 10,

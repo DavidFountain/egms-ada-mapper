@@ -92,14 +92,16 @@ egms_dates = os.listdir(
 ADAS_GDF = read_geo_data(
     os.path.join(INIT_ADA_CLASS_DIR, f"{INIT_AOI_CLEAN}_ada+_union.parquet")
 ).to_crs("EPSG:4326")
+
 POINTS_GDF = read_geo_data(
     os.path.join(INIT_ADA_CLASS_DIR, f"{INIT_AOI_CLEAN}_points.parquet")
 ).to_crs("EPSG:4326")
 POINTS_GDF.rename(
-    columns={"class_label": "trend_class",
-             "trend_subclass2": "trend_subclass",
-             "label_prob": "mp_label_prob",
-            },
+    columns={
+        "class_label": "trend_class",
+        "trend_subclass2": "trend_subclass",
+        "label_prob": "mp_label_prob",
+    },
     inplace=True
 )
 
@@ -211,7 +213,7 @@ path_button_group = html.Div(
     [
         html.H6("Orbit"),
         dbc.RadioItems(
-            id="path-radio",
+            id="orbit-radio",
             class_name="btn-group",
             inputClassName="btn-check",
             labelClassName="btn btn-outline-primary",
@@ -291,9 +293,11 @@ ts_plot_tabs = dbc.Tabs(
                     # ),
                     dash_table.DataTable(
                         id="trendfit-table",
-                        style_data={
+                        style_cell={
                             "whiteSpace": "normal",
                             "height": "auto",
+                            "font_size": "11px",
+                            "text_align": "center"
                         },
                     ),
                     dcc.Graph(
@@ -362,9 +366,11 @@ ts_plot_tabs = dbc.Tabs(
                                         [
                                             dash_table.DataTable(
                                                 id="season-table",
-                                                style_data={
+                                                style_cell={
                                                     "whiteSpace": "normal",
                                                     "height": "auto",
+                                                    "font_size": "11px",
+                                                    "text_align": "center"
                                                 },
                                             ),
                                             dcc.Graph(
@@ -777,74 +783,72 @@ def update_avgvel_dropdown(egms_date, aoi_name):
         [
             State("egms-dropdown", "value"),
             State("aoi-dropdown", "value"),
+            State("orbit-radio", "value"),
             State("avgvel-dropdown", "value"),
-        ],
-        prevent_initial_call=True
+        ]
 )
-def update_aoi_data(n_clicks, egmsdate, aoiname, avgvel):
+def update_aoi_data(n_clicks, egmsdate, aoiname, orbit, avgvel):
     """Update the main mapping dataframes"""
-    if n_clicks > 0:
+    if n_clicks is None:
+        raise PreventUpdate
 
-        global ADAS_GDF
-        global POINTS_GDF
-        global PID_LU_DF
-        global PID_LOOKUP_DIR
+    global ADAS_GDF
+    global POINTS_GDF
+    global PID_LU_DF
+    global PID_LOOKUP_DIR
 
-        ada_class_dir = get_ada_location(
-            ADA_CLASS_DIR, INIT_MODEL_DATE, egmsdate,
-            INIT_PRODUCT, aoi_country_lookup[aoiname],
-            aoi_geohaz_lookup[aoiname], aoiname,
-            INIT_S1PATH, INIT_ADA_TYPE, avgvel
-        )
-        bounds_dir = get_aoi_bounds_location(
-            AOI_BOUNDS_DIR, aoi_country_lookup[aoiname],
-            aoi_geohaz_lookup[aoiname], aoiname
-        )
-        PID_LOOKUP_DIR = get_pid_lookup_location(
-            PID_FILE_LU_DIR, egmsdate, INIT_PRODUCT,
-            aoi_country_lookup[aoiname], aoi_geohaz_lookup[aoiname],
-            aoiname, INIT_S1PATH
-        )
+    ada_class_dir = get_ada_location(
+        ADA_CLASS_DIR, INIT_MODEL_DATE, egmsdate,
+        INIT_PRODUCT, aoi_country_lookup[aoiname],
+        aoi_geohaz_lookup[aoiname], aoiname,
+        orbit, INIT_ADA_TYPE, avgvel
+    )
+    bounds_dir = get_aoi_bounds_location(
+        AOI_BOUNDS_DIR, aoi_country_lookup[aoiname],
+        aoi_geohaz_lookup[aoiname], aoiname
+    )
+    PID_LOOKUP_DIR = get_pid_lookup_location(
+        PID_FILE_LU_DIR, egmsdate, INIT_PRODUCT,
+        aoi_country_lookup[aoiname], aoi_geohaz_lookup[aoiname],
+        aoiname, orbit
+    )
 
-        aoi_clean = re.sub(r"^(.*)_\d+$", "\\1", aoiname)
+    aoi_clean = re.sub(r"^(.*)_\d+$", "\\1", aoiname)
 
-        ADAS_GDF = read_geo_data(
-            os.path.join(ada_class_dir, f"{aoi_clean}_ada+_union.parquet")
-        ).to_crs("EPSG:4326")
-        POINTS_GDF = read_geo_data(
-            os.path.join(ada_class_dir, f"{aoi_clean}_points.parquet")
-        ).to_crs("EPSG:4326")
-        POINTS_GDF.rename(
-            columns={
-                "class_label": "trend_class",
-                "trend_subclass2": "trend_subclass",
-                "label_prob": "mp_label_prob",
-            },
-            inplace=True
-        )
-        POINTS_GDF = POINTS_GDF.sjoin(ADAS_GDF).rename(columns={"index_right": "ada_id"})
-        ada_mean_velocity = POINTS_GDF.groupby("ada_id")["mean_velocity"].mean()
-        ADAS_GDF = ADAS_GDF.merge(
-            ada_mean_velocity, left_index=True, right_index=True    
-        )
-        ADAS_GDF["mean_velocity_grp"] = create_velocity_groups(
-            ADAS_GDF["mean_velocity"]
-        )
-        POINTS_GDF["mean_velocity_grp"] = create_velocity_groups(
-            POINTS_GDF["mean_velocity"]
-        )
-        PID_LU_DF = pd.read_parquet(PID_LOOKUP_DIR)
+    ADAS_GDF = read_geo_data(
+        os.path.join(ada_class_dir, f"{aoi_clean}_ada+_union.parquet")
+    ).to_crs("EPSG:4326")
+    POINTS_GDF = read_geo_data(
+        os.path.join(ada_class_dir, f"{aoi_clean}_points.parquet")
+    ).to_crs("EPSG:4326")
+    POINTS_GDF.rename(
+        columns={
+            "class_label": "trend_class",
+            "trend_subclass2": "trend_subclass",
+            "label_prob": "mp_label_prob",
+        },
+        inplace=True
+    )
+    POINTS_GDF = POINTS_GDF.sjoin(ADAS_GDF).rename(columns={"index_right": "ada_id"})
+    ada_mean_velocity = POINTS_GDF.groupby("ada_id")["mean_velocity"].mean()
+    ADAS_GDF = ADAS_GDF.merge(
+        ada_mean_velocity, left_index=True, right_index=True    
+    )
+    ADAS_GDF["mean_velocity_grp"] = create_velocity_groups(
+        ADAS_GDF["mean_velocity"]
+    )
+    POINTS_GDF["mean_velocity_grp"] = create_velocity_groups(
+        POINTS_GDF["mean_velocity"]
+    )
+    PID_LU_DF = pd.read_parquet(PID_LOOKUP_DIR)
 
-        aoi_bounds_gdf = gpd.read_file(
-            os.path.join(bounds_dir, aoiname + ".geojson")
-        )
-        aoi_centre = aoi_bounds_gdf.centroid.to_crs("EPSG:4326").iloc[0]
-        aoi_centre_list = [aoi_centre.y, aoi_centre.x]
+    aoi_bounds_gdf = gpd.read_file(
+        os.path.join(bounds_dir, aoiname + ".geojson")
+    )
+    aoi_centre = aoi_bounds_gdf.centroid.to_crs("EPSG:4326").iloc[0]
+    aoi_centre_list = [aoi_centre.y, aoi_centre.x]
 
-        print(POINTS_GDF.head())
-        print(POINTS_GDF.crs)
-        print(aoi_centre_list)
-        return 1, aoi_centre_list, 10
+    return 1, aoi_centre_list, 10
 
 
 # ---------------- MAPS ---------------------
@@ -890,21 +894,7 @@ def update_poly_map_colour(color_col, ada_point_val):
     if ada_point_val == 2:
         raise PreventUpdate
     hideout = create_hideout(color_col)
-    classes = create_map_classes(color_col)
-    colorscale = create_map_colorscale(color_col)
     return hideout
-
-
-@callback(
-    Output("map-colorbar", "categories"),
-    Output("map-colorbar", "colorscale"),
-    [Input("color-dropdown", "value")],
-    prevent_initial_call=True
-)
-def update_map_colourbar(color_col):
-    classes = create_map_classes(color_col)
-    colorscale = create_map_colorscale(color_col)
-    return classes, colorscale
 
 
 @callback(
@@ -918,6 +908,18 @@ def update_points_map_colour(color_col, ada_point_val):
         raise PreventUpdate
     hideout = create_points_hideout(color_col)
     return hideout
+
+
+@callback(
+    Output("map-colorbar", "categories"),
+    Output("map-colorbar", "colorscale"),
+    [Input("color-dropdown", "value")],
+    prevent_initial_call=True
+)
+def update_map_colourbar(color_col):
+    classes = create_map_classes(color_col)
+    colorscale = create_map_colorscale(color_col)
+    return classes, colorscale
 
 
 @callback(
@@ -1026,248 +1028,210 @@ def update_scatterplot_ts(fcf_output, point_features, egms_ts):
         return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("trendfit-table", "data"),
-#     Output("trendfit-table", "columns"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data"),
-#      Input("label-probs", "data")],
-#     [State("trend-dropdown", "value"),
-#      State("pid-dropdown", "value")],
-#     prevent_initial_call=True
-# )
-# def update_trndfit_table(egms_ts, fcf_output, lab_probs, trend_type, pid):
-#     if egms_ts is not None:
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         rmse = fcf_output["rmse"]
-#         seg_rmse = fcf_output.get("seg_rmse", np.nan)
-#         columns = ["PID", "Classified trend", "Class probability", "RMSE", "Max Seg. RMSE"]
-#         df = pd.DataFrame(
-#             data={
-#                 "PID": [pid],
-#                 "Classified trend": [trend_type.capitalize()],
-#                 "Class probability": [round(lab_probs, 3)],
-#                 "RMSE": [round(rmse, 3)],
-#                 "Max Seg. RMSE": [round(np.nanmax(seg_rmse), 3)]
-#             },
-#             columns=columns
-#         )
-#         return (df.to_dict("records"),
-#                 [{"name": c, "id": c} for c in df.columns])
-#     return [], []
+@callback(
+    Output("trendfit-table", "data"),
+    Output("trendfit-table", "columns"),
+    [Input("fcf-output", "data")],
+    State("point-map-features", "data"),
+    prevent_initial_call=True
+)
+def update_trndfit_table(fcf_output, click_data):
+    if fcf_output is not None:
+        fcf_output = json.loads(json.dumps(fcf_output))
+        rmse = fcf_output["rmse"]
+        seg_rmse = fcf_output.get("seg_rmse", np.nan)
+        pid = click_data["pid"]
+        trend_type = click_data["trend_class"]
+        lab_probs = click_data["label_prob"]
+        columns = ["PID", "Classified trend", "Class probability", "RMSE", "Max Seg. RMSE"]
+        df = pd.DataFrame(
+            data={
+                "PID": [pid],
+                "Classified trend": [trend_type.capitalize()],
+                "Class probability": [round(lab_probs, 3)],
+                "RMSE": [round(rmse, 3)],
+                "Max Seg. RMSE": [round(np.nanmax(seg_rmse), 3)]
+            },
+            columns=columns
+        )
+        return (df.to_dict("records"),
+                [{"name": c, "id": c} for c in df.columns])
+    return [], []
 
 
-# @callback(
-#     Output("pid-dropdown", "options", allow_duplicate=True),
-#     Input("trend-dropdown", "value"),
-#     prevent_initial_call=True
-# )
-# def update_pid_list(trend_type):
-#     return cvd.get_pids_to_process(egms_ts_df, trend_type)
+@callback(
+    Output("resids-ts", "figure"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_resids_plot(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        fig = plot_time_series_residuals(
+            (
+                egms_ts.iloc[0]
+                - np.array(fcf_output["trend_vals"])
+                - np.array(fcf_output["ffilt"])
+            ),
+            np.array(
+                [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
+            )
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("pid-dropdown", "options", allow_duplicate=True),
-#     Input("output-tsmetrics-button", "n_clicks"),
-#     State("trend-dropdown", "value"),
-#     State("newtrend-dropdown", "value"),
-#     State("cp-date-input", "value"),
-#     State("pid-dropdown", "value"),
-#     prevent_initial_call=True
-# )
-# def output_manual_checks(
-#         n_clicks, trend_class, newtrend_class, date_input, pid):
-#     if n_clicks is None:
-#         raise dash.exceptions.PreventUpdate()
-#     else:
-#         out_df = egms_ts_df[egms_ts_df["pid"] == pid][["pid", "filename"]]
-#         out_df["ml_class"] = trend_class
-#         out_df["manual_class"] = newtrend_class
-#         out_df["cp_locations"] = date_input
-#         output_manual_check_to_disk(out_df)
-#         return cvd.get_pids_to_process(egms_ts_df, trend_class, pid)
+@callback(
+    Output("resids-fit", "figure"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_resids_fit_plot(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        fig = plot_fitted_residuals(
+            (
+                np.array(fcf_output["trend_vals"])
+                + np.array(fcf_output["ffilt"])
+            ),
+            (
+                egms_ts.iloc[0]
+                - np.array(fcf_output["trend_vals"])
+                - np.array(fcf_output["ffilt"])
+            ),
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("resids-ts", "figure"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     [State("trend-dropdown", "value"),
-#      State("pid-dropdown", "value")],
-#     prevent_initial_call=True
-# )
-# def update_resids_plot(egms_ts, fcf_output, trend_type, pid):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         fig = plot_time_series_residuals(
-#             (
-#                 egms_ts.iloc[0]
-#                 - np.array(fcf_output["trend_vals"])
-#                 - np.array(fcf_output["ffilt"])
-#             ),
-#             np.array(
-#                 [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
-#             )
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
+@callback(
+    Output("resids-qq", "figure"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_resids_qq_plot(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        fig = plot_qq(
+            (
+                egms_ts.iloc[0]
+                - np.array(fcf_output["trend_vals"])
+                - np.array(fcf_output["ffilt"])
+            ),
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("resids-fit", "figure"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     [State("trend-dropdown", "value"),
-#      State("pid-dropdown", "value")],
-#     prevent_initial_call=True
-# )
-# def update_resids_fit_plot(egms_ts, fcf_output, trend_type, pid):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         fig = plot_fitted_residuals(
-#             (
-#                 np.array(fcf_output["trend_vals"])
-#                 + np.array(fcf_output["ffilt"])
-#             ),
-#             (
-#                 egms_ts.iloc[0]
-#                 - np.array(fcf_output["trend_vals"])
-#                 - np.array(fcf_output["ffilt"])
-#             ),
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
+@callback(
+    Output("season-psd", "figure"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_psd_plot(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        fig = plot_psd(
+            np.array(fcf_output["psd"]),
+            np.array(fcf_output["freq"]),
+            fcf_output["psd_thr"],
+            [fcf_output["min_season_freq"], fcf_output["max_season_freq"]],
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("resids-qq", "figure"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     [State("trend-dropdown", "value"),
-#      State("pid-dropdown", "value")],
-#     prevent_initial_call=True
-# )
-# def update_resids_qq_plot(egms_ts, fcf_output, trend_type, pid):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         fig = plot_qq(
-#             (
-#                 egms_ts.iloc[0]
-#                 - np.array(fcf_output["trend_vals"])
-#                 - np.array(fcf_output["ffilt"])
-#             ),
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
+@callback(
+    Output("season-ts", "figure"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_season_ts_plot(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        if np.sum(np.abs(fcf_output["ffilt"])) > 0:
+            peaks, troughs = (fcf_output["season_peaks"][0],
+                              fcf_output["season_peaks"][2])
+        else:
+            peaks, troughs = [], []
+        fig = plot_seasonality_ts(
+            np.array(fcf_output["ffilt"]),
+            np.array(
+                [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
+            ),
+            peaks,
+            troughs,
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
-# @callback(
-#     Output("season-psd", "figure"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     [State("season-freq-slider", "value"),
-#      State("psd-input", "value")],
-#     prevent_initial_call=True
-# )
-# def update_psd_plot(egms_ts, fcf_output, freq_thr, psd_thr):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         fig = plot_psd(
-#             np.array(fcf_output["psd"]),
-#             np.array(fcf_output["freq"]),
-#             fcf_output["psd_thr"],
-#             [fcf_output["min_season_freq"], fcf_output["max_season_freq"]],
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
+@callback(
+    Output("season-table", "data"),
+    Output("season-table", "columns"),
+    [Input("fcf-output", "data")],
+    [State("egms-ts", "data")],
+    prevent_initial_call=True
+)
+def update_season_table(fcf_output, egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        fcf_output = json.loads(json.dumps(fcf_output))
+        if np.sum(np.abs(fcf_output["ffilt"])) > 0:
+            peak_amp = fcf_output["season_pkpk_amp"]
+            rms = fcf_output["season_rms"]
+            dates = [
+                datetime.strptime(d, "%Y%m%d") for d in
+                egms_ts.columns[fcf_output["season_peaks"][0]]
+            ]
+            period = [d.days for d in np.diff(dates)]
+            columns = ["", "Period (days)", "Peak-peak amp (mm)", "RMS"]
+            df = pd.DataFrame(
+                data={
+                    "": ["Mean", "Sdev"],
+                    "Period (days)": [round(np.mean(period), 2),
+                                      round(np.std(period), 2)],
+                    "Peak-peak amp (mm)": [round(np.mean(np.abs(peak_amp)), 2),
+                                           round(np.std(np.abs(peak_amp)), 2)],
+                    "RMS": [round(rms, 2), ""]
+                },
+                columns=columns
+            )
+            return (df.to_dict("records"),
+                    [{"name": c, "id": c} for c in df.columns])
+        return [], []
+    return [], []
 
 
-# @callback(
-#     Output("season-ts", "figure"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     prevent_initial_call=True
-# )
-# def update_season_ts_plot(egms_ts, fcf_output):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         if np.sum(np.abs(fcf_output["ffilt"])) > 0:
-#             peaks, troughs = fcf_output["season_peaks"][0], fcf_output["season_peaks"][2]
-#         else:
-#             peaks, troughs = [], []
-#         fig = plot_seasonality_ts(
-#             np.array(fcf_output["ffilt"]),
-#             np.array(
-#                 [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
-#             ),
-#             peaks,
-#             troughs,
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
-
-
-# @callback(
-#     Output("season-table", "data"),
-#     Output("season-table", "columns"),
-#     [Input("egms-ts", "data"),
-#      Input("fcf-output", "data")],
-#     prevent_initial_call=True
-# )
-# def update_season_table(egms_ts, fcf_output):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         fcf_output = json.loads(json.dumps(fcf_output))
-#         if np.sum(np.abs(fcf_output["ffilt"])) > 0:
-#             peak_amp = fcf_output["season_pkpk_amp"]
-#             rms = fcf_output["season_rms"]
-#             dates = [
-#                 datetime.strptime(d, "%Y%m%d") for d in
-#                 egms_ts.columns[fcf_output["season_peaks"][0]]
-#             ]
-#             period = [d.days for d in np.diff(dates)]
-#             columns = ["", "Period (days)", "Peak-peak amp (mm)", "RMS"]
-#             df = pd.DataFrame(
-#                 data={
-#                     "": ["Mean", "Sdev"],
-#                     "Period (days)": [round(np.mean(period), 2),
-#                                       round(np.std(period), 2)],
-#                     "Peak-peak amp (mm)": [round(np.mean(np.abs(peak_amp)), 2),
-#                                            round(np.std(np.abs(peak_amp)), 2)],
-#                     "RMS": [round(rms, 2), ""]
-#                 },
-#                 columns=columns
-#             )
-#             return (df.to_dict("records"),
-#                     [{"name": c, "id": c} for c in df.columns])
-#         return [], []
-#     return [], []
-
-
-# @callback(
-#     Output("outliers-ts", "figure"),
-#     [Input("egms-ts", "data")],
-#     [State("trend-outlier-thr", "value")],
-#     prevent_initial_call=True
-# )
-# def update_outliers_ts_plot(egms_ts, outlier_thr):
-#     if egms_ts is not None:
-#         egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
-#         egms_ts = egms_ts.dropna(axis=1)
-#         fig = plot_ts_outliers(
-#             egms_ts.iloc[0],
-#             np.array(
-#                 [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
-#             ),
-#             thr=8.45 if outlier_thr is None else outlier_thr,
-#         )
-#         return fig
-#     return plot_blank_scatterplot()
+@callback(
+    Output("outliers-ts", "figure"),
+    [Input("egms-ts", "data")],
+    # [State("trend-outlier-thr", "value")],
+    prevent_initial_call=True
+)
+def update_outliers_ts_plot(egms_ts):
+    if egms_ts is not None:
+        egms_ts = pd.DataFrame.from_dict(json.loads(egms_ts))
+        egms_ts = egms_ts.dropna(axis=1)
+        fig = plot_ts_outliers(
+            egms_ts.iloc[0],
+            np.array(
+                [datetime.strptime(d, "%Y%m%d") for d in egms_ts.columns]
+            ),
+            thr=8.45,
+        )
+        return fig
+    return plot_blank_scatterplot()
 
 
 @callback(
